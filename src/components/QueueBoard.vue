@@ -3,7 +3,7 @@
     <div class="column">
       <h2>Ожидают ({{ waiting.length }})</h2>
       
-      <TransitionGroup name="list" tag="div" class="list-container">
+      <TransitionGroup name="list" tag="div" class="list-container" aria-live="polite">
         <TicketCard 
           v-for="ticket in waiting" 
           :key="ticket.id" 
@@ -20,7 +20,7 @@
     <div class="column">
       <h2>У окон ({{ processing.length }})</h2>
       
-      <TransitionGroup name="list" tag="div" class="list-container">
+      <TransitionGroup name="list" tag="div" class="list-container" aria-live="polite">
         <TicketCard 
           v-for="ticket in processing" 
           :key="ticket.id" 

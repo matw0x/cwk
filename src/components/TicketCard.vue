@@ -1,5 +1,5 @@
 <template>
-  <div class="ticket-card" :class="ticket.status">
+  <article class="ticket-card" :class="ticket.status">
     <div class="ticket-header">
       <span class="ticket-id">{{ ticket.id }}</span>
       <span v-if="isMine" class="badge">Это вы</span>
@@ -11,7 +11,7 @@
       </span>
       <span v-else>Завершено</span>
     </div>
-  </div>
+  </article>
 </template>
 
 <script setup>
