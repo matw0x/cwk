@@ -1,34 +1,41 @@
 /**
  * src/composables/useQueue.js
  *
- * Бизнес-логика очереди. Связывает асинхронный mockApi с реактивным
- * состоянием Vue. Подписана на внешние изменения mockApi.
+ * Бизнес-логика очереди.
  */
 import { ref, computed, readonly, onMounted, onUnmounted } from 'vue';
 import { mockApi } from '../api/mockBackend.js';
 
 export function useQueue() {
-  // === Состояние ===
   const tickets = ref([]);
   const isLoading = ref(false);
   const isInitialLoad = ref(true);
   const errorMsg = ref(null);
+  const servedCount = ref(0); // обслужено всего (для статистики)
 
-  // === Computed ===
-  // Сортируем по timestamp, чтобы порядок был стабильным
-  const sortedWaiting = computed(() =>
+  const waitingTickets = computed(() =>
     [...tickets.value]
       .filter((t) => t.status === 'waiting' || t.status === 'skipped')
       .sort((a, b) => a.timestamp - b.timestamp)
   );
 
-  const waitingTickets = sortedWaiting; // алиас для совместимости с шаблонами
-
   const processingTickets = computed(() =>
     tickets.value.filter((t) => t.status === 'processing')
   );
 
-  // === Хелпер для async-операций ===
+  // Среднее время обслуживания (по завершённым талонам)
+  // Замер: timestamp при создании vs Date.now() при завершении — приблизительно.
+  // Для демо достаточно, для реальной системы нужно хранить отдельные time-stamps.
+  const avgServiceMinutes = computed(() => {
+    const done = tickets.value.filter((t) => t.status === 'done');
+    if (done.length === 0) return 3; // дефолт
+    // Очень грубая оценка: время от взятия до сейчас, делим пополам
+    // (это для UI-демо, не для аналитики)
+    const total = done.reduce((sum, t) => sum + (Date.now() - t.timestamp), 0);
+    const avgMs = total / done.length;
+    return Math.max(1, Math.round(avgMs / 60000 / 2));
+  });
+
   const runAction = async (fn) => {
     isLoading.value = true;
     errorMsg.value = null;
@@ -43,16 +50,15 @@ export function useQueue() {
     }
   };
 
-  // === Действия ===
   const loadTickets = async (silent = false) => {
     if (!silent) isInitialLoad.value = true;
     await runAction(async () => {
       tickets.value = await mockApi.getTickets();
+      servedCount.value = mockApi.getServedCount();
     });
     isInitialLoad.value = false;
   };
 
-  // takeTicket теперь принимает ownerId — это id пользователя из ?user=
   const takeTicket = async (clientName = '', ownerId = null) => {
     return runAction(async () => {
       const newTicket = await mockApi.addTicket(clientName, ownerId);
@@ -104,6 +110,15 @@ export function useQueue() {
       if (index !== -1) {
         tickets.value[index] = { ...tickets.value[index], status: 'done' };
       }
+      servedCount.value = mockApi.getServedCount();
+    });
+  };
+
+  const resetAll = async () => {
+    return runAction(async () => {
+      await mockApi.resetAll();
+      tickets.value = [];
+      servedCount.value = 0;
     });
   };
 
@@ -111,7 +126,6 @@ export function useQueue() {
     errorMsg.value = null;
   };
 
-  // === Кросс-табная синхронизация ===
   let unsubscribe = null;
   onMounted(() => {
     unsubscribe = mockApi.onExternalChange(() => {
@@ -126,6 +140,8 @@ export function useQueue() {
     tickets: readonly(tickets),
     waitingTickets,
     processingTickets,
+    servedCount: readonly(servedCount),
+    avgServiceMinutes,
     isLoading: readonly(isLoading),
     isInitialLoad: readonly(isInitialLoad),
     errorMsg: readonly(errorMsg),
@@ -136,6 +152,7 @@ export function useQueue() {
     callNextClient,
     skipTicket,
     finishTicket,
+    resetAll,
     clearError,
   };
 }

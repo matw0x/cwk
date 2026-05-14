@@ -1,28 +1,35 @@
 <template>
   <article
     class="ticket-card"
-    :class="[ticket.status, { mine: isMine }]"
+    :class="[ticket.status, { mine: isMine, 'is-next': isNext }]"
     :aria-label="`Талон ${ticket.id}, статус ${statusText}`"
   >
     <div class="ticket-main">
       <div class="ticket-header">
-        <span class="ticket-id">{{ ticket.id }}</span>
+        <!-- ID можно скопировать по клику -->
+        <button
+          class="ticket-id"
+          type="button"
+          :title="copied ? 'Скопировано!' : 'Скопировать номер'"
+          @click="copyId"
+        >
+          {{ ticket.id }}
+          <span v-if="copied" class="copied-mark">✓</span>
+        </button>
+        <span v-if="isNext" class="badge badge-next">следующий</span>
         <span v-if="isMine" class="badge badge-mine">Это вы</span>
         <span v-if="ticket.status === 'skipped'" class="badge badge-skipped">
           Пропущен
         </span>
       </div>
 
-      <!-- Имя клиента -->
       <div v-if="ticket.clientName" class="ticket-name">
         <template v-if="isOperatorView || showFullName">
           <span>{{ ticket.clientName }}</span>
-          <!-- Кнопка "свернуть" — только для клиентского режима -->
           <button
             v-if="!isOperatorView && showFullName"
             class="name-toggle"
             type="button"
-            aria-label="Скрыть имя"
             @click="showFullName = false"
           >
             скрыть
@@ -32,7 +39,6 @@
           v-else
           class="name-reveal"
           type="button"
-          aria-label="Показать имя полностью"
           @click="showFullName = true"
         >
           {{ maskedName }} 👁
@@ -42,14 +48,13 @@
 
     <div class="ticket-info">
       <span v-if="ticket.status === 'waiting'">В ожидании</span>
-      <span v-else-if="ticket.status === 'skipped'">Ожидает повторного вызова</span>
+      <span v-else-if="ticket.status === 'skipped'">Будет вызван позднее</span>
       <span v-else-if="ticket.status === 'processing'" class="processing-info">
         Окно <strong class="window-num">№{{ ticket.window }}</strong>
       </span>
       <span v-else>Завершено</span>
     </div>
 
-    <!-- Кнопка "выйти из очереди": только для своих ожидающих/пропущенных талонов -->
     <button
       v-if="isMine && (ticket.status === 'waiting' || ticket.status === 'skipped')"
       class="btn-cancel"
@@ -70,16 +75,15 @@ import { ref, computed } from 'vue';
 const props = defineProps({
   ticket: { type: Object, required: true },
   isMine: { type: Boolean, default: false },
-  isOperatorView: { type: Boolean, default: false }, // оператор видит имя без маски
+  isOperatorView: { type: Boolean, default: false },
+  isNext: { type: Boolean, default: false }, // следующий в очереди (пункт 4)
   isLoading: { type: Boolean, default: false },
 });
 
 defineEmits(['cancel']);
 
-// Локальное состояние: раскрыто ли имя
 const showFullName = ref(false);
 
-// Маска для имени: "Иван Иванов" → "Ив*** И."
 const maskedName = computed(() => {
   const name = props.ticket.clientName || '';
   const parts = name.trim().split(/\s+/);
@@ -89,43 +93,55 @@ const maskedName = computed(() => {
   return first.slice(0, 2) + '***' + lastInitial;
 });
 
-const statusText = computed(() => {
-  return {
-    waiting: 'в ожидании',
-    processing: `у окна номер ${props.ticket.window}`,
-    skipped: 'пропущен',
-    done: 'завершён',
-  }[props.ticket.status];
-});
+const statusText = computed(() => ({
+  waiting: 'в ожидании',
+  processing: `у окна номер ${props.ticket.window}`,
+  skipped: 'пропущен',
+  done: 'завершён',
+}[props.ticket.status]));
+
+// Копирование номера (пункт 5)
+const copied = ref(false);
+const copyId = async () => {
+  try {
+    await navigator.clipboard.writeText(props.ticket.id);
+    copied.value = true;
+    setTimeout(() => (copied.value = false), 1500);
+  } catch {
+    /* тихо игнорируем */
+  }
+};
 </script>
 
 <style scoped>
 .ticket-card {
   background-color: var(--card-bg);
   border-radius: var(--border-radius);
-  padding: 1rem 1.25rem;
-  margin-bottom: 0.75rem;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+  padding: 0.7rem 1rem;
+  margin-bottom: 0.5rem;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 1rem;
-  border-left: 6px solid transparent;
+  gap: 0.75rem;
+  border-left: 5px solid transparent;
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .ticket-card.waiting { border-left-color: var(--warning); }
 .ticket-card.processing {
   border-left-color: var(--success);
-  /* Мягкое свечение вместо пульсации — никаких "тряслок" */
-  box-shadow: 0 2px 12px var(--success-glow);
+  box-shadow: 0 2px 10px var(--success-glow);
 }
 .ticket-card.skipped { border-left-color: var(--danger); }
 .ticket-card.done { border-left-color: gray; opacity: 0.5; }
 
-/* Подсветка "своего" талона */
-.ticket-card.mine {
-  background-color: var(--mine-bg);
+.ticket-card.mine { background-color: var(--mine-bg); }
+
+/* "следующий" — тонкая акцентная рамка вокруг карточки */
+.ticket-card.is-next {
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
 }
 
 .ticket-main { flex: 1; min-width: 0; }
@@ -133,83 +149,99 @@ const statusText = computed(() => {
 .ticket-header {
   display: flex;
   align-items: center;
-  gap: 0.6rem;
+  gap: 0.5rem;
   flex-wrap: wrap;
 }
 
 .ticket-id {
-  font-size: 1.8rem;
+  position: relative;
+  font-size: 1.4rem;
   font-weight: 800;
   letter-spacing: 0.5px;
+  background: transparent;
+  border: none;
+  color: var(--text-color);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+.ticket-id:hover { background-color: rgba(0, 0, 0, 0.06); }
+
+.copied-mark {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  background: var(--success);
+  color: white;
+  font-size: 0.65rem;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .ticket-name {
-  margin-top: 0.25rem;
-  font-size: 0.9rem;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
   opacity: 0.85;
   display: flex;
   align-items: center;
   gap: 0.4rem;
   flex-wrap: wrap;
 }
-
-/* Кнопка раскрытия имени */
 .name-reveal {
   background: transparent;
   border: 1px dashed var(--text-color);
   color: var(--text-color);
-  padding: 0.15rem 0.5rem;
-  font-size: 0.85rem;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.8rem;
   opacity: 0.7;
   font-weight: normal;
-  transition: opacity 0.2s ease, border-color 0.2s ease;
 }
 .name-reveal:hover { opacity: 1; border-color: var(--primary); }
-
-/* Кнопка "скрыть имя" */
 .name-toggle {
   background: transparent;
   border: none;
   color: var(--primary);
   padding: 0;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
   font-weight: normal;
   text-decoration: underline;
   opacity: 0.7;
 }
 .name-toggle:hover { opacity: 1; }
 
-.window-num {
-  font-size: 1.4rem;
-  color: var(--success);
-}
-
-.processing-info {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+.window-num { font-size: 1.2rem; color: var(--success); }
+.processing-info { display: inline-flex; align-items: center; gap: 0.4rem; }
 
 .badge {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.55rem;
+  font-size: 0.7rem;
+  padding: 0.15rem 0.5rem;
   border-radius: 12px;
   font-weight: bold;
   color: white;
 }
 .badge-mine { background-color: var(--primary); }
 .badge-skipped { background-color: var(--danger); }
+.badge-next {
+  background-color: var(--warning);
+  color: #4a3500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
-/* Кнопка выхода из очереди */
 .btn-cancel {
   background: transparent;
   border: 1px solid var(--danger);
   color: var(--danger);
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 50%;
-  font-size: 1rem;
+  font-size: 0.9rem;
   font-weight: bold;
   flex-shrink: 0;
   transition: background-color 0.2s ease, color 0.2s ease;

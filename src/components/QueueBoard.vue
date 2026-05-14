@@ -7,7 +7,6 @@
         <span class="counter">{{ waiting.length }}</span>
       </h2>
 
-      <!-- Скелетоны при первой загрузке -->
       <div v-if="isInitialLoad" class="list-container">
         <SkeletonCard v-for="n in 3" :key="`sk-w-${n}`" />
       </div>
@@ -25,6 +24,7 @@
           :ticket="ticket"
           :is-mine="myTicketIds.includes(ticket.id)"
           :is-operator-view="isOperatorView"
+          :is-next="showNextHint && ticket.id === nextTicketId"
           :is-loading="isLoading"
           @cancel="$emit('cancel', $event)"
         />
@@ -73,36 +73,46 @@
 </template>
 
 <script setup>
+import { computed } from 'vue';
 import TicketCard from './TicketCard.vue';
 import SkeletonCard from './SkeletonCard.vue';
 
-defineProps({
+const props = defineProps({
   waiting: { type: Array, required: true },
   processing: { type: Array, required: true },
   myTicketIds: { type: Array, default: () => [] },
   isInitialLoad: { type: Boolean, default: false },
   isOperatorView: { type: Boolean, default: false },
   isLoading: { type: Boolean, default: false },
+  showNextHint: { type: Boolean, default: false }, // показывать ли бейдж "следующий"
 });
 
 defineEmits(['cancel']);
+
+// ID первого в очереди — кого вызовут следующим
+// Приоритет такой же, как в mockApi.callNext (но без проверки skipUntil — для UI достаточно)
+const nextTicketId = computed(() => {
+  const skipped = props.waiting.find((t) => t.status === 'skipped');
+  if (skipped) return skipped.id;
+  const first = props.waiting.find((t) => t.status === 'waiting');
+  return first?.id || null;
+});
 </script>
 
 <style scoped>
 .queue-board {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin: 1.5rem 0;
+  gap: 1rem;
+  margin: 1rem 0;
 }
 
 .column {
   background: var(--column-bg);
-  padding: 1.25rem;
+  padding: 0.85rem;
   border-radius: var(--border-radius);
   border: 1px solid var(--border-soft);
-  /* Минимальная высота, чтобы пустые колонки не выглядели сжато */
-  min-height: 400px;
+  min-height: 240px;
   display: flex;
   flex-direction: column;
 }
@@ -111,9 +121,9 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.6rem;
-  margin: 0 0 1rem 0;
-  font-size: 1.1rem;
+  gap: 0.5rem;
+  margin: 0 0 0.75rem 0;
+  font-size: 0.95rem;
   text-transform: uppercase;
   letter-spacing: 1px;
   opacity: 0.85;
@@ -122,35 +132,34 @@ h2 {
 .counter {
   background: var(--primary);
   color: white;
-  font-size: 0.85rem;
-  padding: 0.15rem 0.6rem;
+  font-size: 0.8rem;
+  padding: 0.1rem 0.55rem;
   border-radius: 999px;
-  min-width: 28px;
+  min-width: 24px;
   text-align: center;
 }
 
 .empty-state {
   text-align: center;
   opacity: 0.5;
-  margin: auto 0; /* центрирование по вертикали внутри flex-колонки */
+  margin: auto 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.5rem;
-  padding: 2rem 0;
+  gap: 0.4rem;
+  padding: 1.5rem 0;
 }
-.empty-icon { font-size: 2rem; }
+.empty-icon { font-size: 1.6rem; }
 
 .list-container {
   flex: 1;
-  /* Используем calc от высоты вьюпорта, чтобы список вытягивался под экран */
-  max-height: calc(100vh - 320px);
-  min-height: 300px;
+  /* Динамическая высота под доступное пространство, но не слишком много */
+  max-height: 45vh;
   overflow-y: auto;
-  padding-right: 6px;
+  padding-right: 4px;
   scroll-behavior: smooth;
 }
-.list-container::-webkit-scrollbar { width: 6px; }
+.list-container::-webkit-scrollbar { width: 5px; }
 .list-container::-webkit-scrollbar-thumb {
   background: var(--border-soft);
   border-radius: 4px;
@@ -158,8 +167,8 @@ h2 {
 .list-container::-webkit-scrollbar-thumb:hover { background: var(--primary); }
 
 @media (max-width: 768px) {
-  .queue-board { grid-template-columns: 1fr; gap: 1rem; }
-  .column { min-height: 250px; }
-  .list-container { max-height: 60vh; }
+  .queue-board { grid-template-columns: 1fr; }
+  .column { min-height: 200px; }
+  .list-container { max-height: 50vh; }
 }
 </style>
