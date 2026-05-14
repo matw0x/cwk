@@ -1,6 +1,6 @@
 // src/main.js
-import { createApp } from 'vue'
-import App from './App.vue'
+import { createApp } from 'vue';
+import App from './App.vue';
 
 // Инициализация Vue и монтирование в div id="app"
-createApp(App).mount('#app')
+createApp(App).mount('#app');
