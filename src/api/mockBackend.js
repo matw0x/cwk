@@ -11,7 +11,28 @@
  */
 
 const STORAGE_KEY = 'queue:data';
-const SKIP_AHEAD = 2; // сколько клиентов пропустить вперёд
+const SKIP_AHEAD = 1; // через сколько обслуживаний пропущенный снова доступен
+export { SKIP_AHEAD };
+
+// Кто будет вызван следующим (используется и моком, и UI — чтобы не расходились).
+// Логика:
+//   1. Сперва skipped с истёкшим skipUntil
+//   2. Иначе первый waiting
+//   3. Если waiting нет вообще, но есть "спящий" skipped — отдаём его,
+//      иначе очередь застрянет (некого обслуживать, чтобы он "созрел").
+export function pickNextTicket(tickets, servedCount) {
+  const sorted = [...tickets].sort((a, b) => a.timestamp - b.timestamp);
+  const readySkipped = sorted.find(
+    (t) => t.status === 'skipped' && servedCount >= (t.skipUntil ?? 0)
+  );
+  if (readySkipped) return readySkipped;
+
+  const firstWaiting = sorted.find((t) => t.status === 'waiting');
+  if (firstWaiting) return firstWaiting;
+
+  // Fallback: больше нет никого, кроме спящих skipped — выдаём первого
+  return sorted.find((t) => t.status === 'skipped') || null;
+}
 
 function loadState() {
   try {
@@ -108,22 +129,10 @@ export const mockApi = {
       return { error: `Окно ${windowNumber} уже занято` };
     }
 
-    const sorted = sortedCopy();
-
-    // Сначала ищем "созревшие" skipped — те, чей skipUntil уже пройден
-    const readySkipped = sorted.find(
-      (t) => t.status === 'skipped' && state.servedCount >= (t.skipUntil ?? 0)
-    );
-
-    // Иначе берём первого waiting
-    const next = readySkipped || sorted.find((t) => t.status === 'waiting');
+    // Используем общий хелпер — UI берёт того же кандидата
+    const next = pickNextTicket(state.tickets, state.servedCount);
 
     if (!next) {
-      // Дополнительно проверим: может, есть skipped, но они ещё "спят"?
-      const stillSleeping = sorted.find((t) => t.status === 'skipped');
-      if (stillSleeping) {
-        return { error: 'Очередь пуста (пропущенные ещё не созрели)' };
-      }
       return { error: 'Очередь пуста, некого вызывать' };
     }
 

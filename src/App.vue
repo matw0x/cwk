@@ -141,6 +141,7 @@
         :is-loading="isLoading"
         :is-operator-view="true"
         :show-next-hint="true"
+        :served-count="servedCount"
       />
     </section>
 

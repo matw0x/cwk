@@ -76,6 +76,7 @@
 import { computed } from 'vue';
 import TicketCard from './TicketCard.vue';
 import SkeletonCard from './SkeletonCard.vue';
+import { pickNextTicket } from '../api/mockBackend.js';
 
 const props = defineProps({
   waiting: { type: Array, required: true },
@@ -85,17 +86,16 @@ const props = defineProps({
   isOperatorView: { type: Boolean, default: false },
   isLoading: { type: Boolean, default: false },
   showNextHint: { type: Boolean, default: false }, // показывать ли бейдж "следующий"
+  servedCount: { type: Number, default: 0 }, // нужно для проверки skipUntil
 });
 
 defineEmits(['cancel']);
 
-// ID первого в очереди — кого вызовут следующим
-// Приоритет такой же, как в mockApi.callNext (но без проверки skipUntil — для UI достаточно)
+// Используем тот же хелпер, что и мок — чтобы UI и бэк-логика не расходились.
+// Если пропущенный ещё "спит" (skipUntil не пройден), бейдж получит следующий waiting.
 const nextTicketId = computed(() => {
-  const skipped = props.waiting.find((t) => t.status === 'skipped');
-  if (skipped) return skipped.id;
-  const first = props.waiting.find((t) => t.status === 'waiting');
-  return first?.id || null;
+  const next = pickNextTicket(props.waiting, props.servedCount);
+  return next?.id || null;
 });
 </script>
 
